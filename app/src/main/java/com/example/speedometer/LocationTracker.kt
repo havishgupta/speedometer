@@ -13,13 +13,15 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 
+data class LocationData(val speedMps: Float, val latitude: Double, val longitude: Double)
+
 class LocationTracker(private val context: Context) {
 
     private val fusedLocationClient: FusedLocationProviderClient =
         LocationServices.getFusedLocationProviderClient(context)
 
     @SuppressLint("MissingPermission")
-    fun getSpeedUpdates(): Flow<Float> = callbackFlow {
+    fun getLocationUpdates(): Flow<LocationData> = callbackFlow {
         // High accuracy is required for precise speed calculations
         val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000L)
             .setMinUpdateIntervalMillis(500L)
@@ -29,11 +31,9 @@ class LocationTracker(private val context: Context) {
             override fun onLocationResult(result: LocationResult) {
                 super.onLocationResult(result)
                 val location = result.lastLocation
-                if (location != null && location.hasSpeed()) {
-                    trySend(location.speed) // speed is in m/s
-                } else {
-                    // Fallback if speed isn't explicitly calculated by the system
-                    trySend(0f)
+                if (location != null) {
+                    val speed = if (location.hasSpeed()) location.speed else 0f
+                    trySend(LocationData(speed, location.latitude, location.longitude))
                 }
             }
         }
