@@ -2,48 +2,50 @@ package com.example.speedometer
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.location.Location
-import android.location.LocationListener
-import android.location.LocationManager
-import android.os.Bundle
+import android.os.Looper
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 
 class LocationTracker(private val context: Context) {
 
+    private val fusedLocationClient: FusedLocationProviderClient =
+        LocationServices.getFusedLocationProviderClient(context)
+
     @SuppressLint("MissingPermission")
     fun getSpeedUpdates(): Flow<Float> = callbackFlow {
-        val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        // High accuracy is required for precise speed calculations
+        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000L)
+            .setMinUpdateIntervalMillis(500L)
+            .build()
 
-        val locationListener = object : LocationListener {
-            override fun onLocationChanged(location: Location) {
-                // speed is in meters/second
-                if (location.hasSpeed()) {
-                    trySend(location.speed)
+        val locationCallback = object : LocationCallback() {
+            override fun onLocationResult(result: LocationResult) {
+                super.onLocationResult(result)
+                val location = result.lastLocation
+                if (location != null && location.hasSpeed()) {
+                    trySend(location.speed) // speed is in m/s
                 } else {
+                    // Fallback if speed isn't explicitly calculated by the system
                     trySend(0f)
                 }
             }
-            @Deprecated("Deprecated in Java")
-            override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
-            override fun onProviderEnabled(provider: String) {}
-            override fun onProviderDisabled(provider: String) {
-                trySend(0f)
-            }
         }
 
-        // Request updates: 0 minTime and 0 minDistance for highest frequency (speedometer needs real-time)
-        // Since we only use GPS_PROVIDER, it relies purely on GPS, saving network battery but requiring clear sky.
-        locationManager.requestLocationUpdates(
-            LocationManager.GPS_PROVIDER,
-            0L,
-            0f,
-            locationListener
+        fusedLocationClient.requestLocationUpdates(
+            locationRequest,
+            locationCallback,
+            Looper.getMainLooper()
         )
 
         awaitClose {
-            locationManager.removeUpdates(locationListener)
+            fusedLocationClient.removeLocationUpdates(locationCallback)
         }
     }
 }

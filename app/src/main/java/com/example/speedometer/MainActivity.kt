@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -38,6 +39,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var locationTracker: LocationTracker
     private var speedMps by mutableFloatStateOf(0f)
     private var hasPermission by mutableStateOf(false)
+    private var trackingJob: Job? = null
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -84,7 +86,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startTracking() {
-        lifecycleScope.launch {
+        trackingJob?.cancel()
+        trackingJob = lifecycleScope.launch {
             locationTracker.getSpeedUpdates().collect { speed ->
                 speedMps = speed
             }
